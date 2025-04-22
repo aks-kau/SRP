@@ -1,8 +1,9 @@
-arxiv==1.4.7
-psycopg2-binary==2.9.9
-google-cloud-aiplatform==1.36.0
-python-dotenv==1.0.0
-tqdm==4.66.1
 flask==2.3.3
+werkzeug==2.3.7
+flask-cors==3.0.10
+google-cloud-aiplatform==1.36.4
+numpy==1.26.0
+python-dotenv==0.19.0
+tqdm==4.66.1
 sentence-transformers==2.2.2
 gunicorn==21.2.0 
