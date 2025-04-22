@@ -1,0 +1,8 @@
+arxiv==1.4.7
+psycopg2-binary==2.9.9
+google-cloud-aiplatform==1.36.0
+python-dotenv==1.0.0
+tqdm==4.66.1
+flask==2.3.3
+sentence-transformers==2.2.2
+gunicorn==21.2.0 
