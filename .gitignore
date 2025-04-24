@@ -44,3 +44,12 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db 
+
+# Security - Credentials
+credentials.json
+*-credentials.json
+*-service-account.json
+*.pem
+*.key
+run_app.bat
+env.txt 

@@ -5,21 +5,59 @@ import json
 import sqlite3
 import numpy as np
 from typing import List, Dict, Any
-from transformers import AutoTokenizer, AutoModel
-import torch
 import traceback
 import datetime
+from vertex_ai_config import initialize_vertex_ai, get_embeddings
+from sentence_transformers import SentenceTransformer
+from dotenv import load_dotenv
+from vertexai.language_models import TextGenerationModel
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 # Update CORS configuration to allow all origins during development
 CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Initialize model variables
-model_name = "sentence-transformers/all-MiniLM-L6-v2"
-print("Loading model...")
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModel.from_pretrained(model_name)
-print("Model loaded successfully")
+# Initialize Vertex AI
+print("Initializing Vertex AI...")
+try:
+    project_id, location = initialize_vertex_ai()
+    print(f"Vertex AI initialized with project {project_id} in {location}")
+except Exception as e:
+    print(f"Error initializing Vertex AI: {e}")
+    print("Falling back to local embeddings...")
+    # You can add fallback to local embeddings here if needed
+
+# Initialize the sentence transformer model
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# Initialize Vertex AI text generation model
+print("Initializing Vertex AI text generation model...")
+generation_model = None
+
+# Try loading the explicitly supported version
+try:
+    print("Trying to initialize text-bison@001 model...")
+    project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+    location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    
+    # Use explicit project and location
+    model_name = "text-bison@001"
+    generation_model = TextGenerationModel.from_pretrained(model_name)
+    print(f"Successfully initialized model: {model_name}")
+except Exception as e:
+    print(f"Failed to initialize model: {e}")
+    generation_model = None
+
+if not generation_model:
+    print("Warning: Text generation model initialization failed. Paper generation feature will be disabled.")
+
+# Database configuration
+DB_FILE = 'papers.db'
+
+def get_db_connection():
+    return sqlite3.connect(DB_FILE)
 
 @app.route('/', methods=['GET'])
 def root():
@@ -28,7 +66,8 @@ def root():
         "message": "Semantic Search API is running",
         "endpoints": {
             "/test": "Test endpoint",
-            "/search": "Search endpoint (POST)"
+            "/search": "Search endpoint (POST)",
+            "/generate_paper": "Generate paper endpoint (POST)"
         }
     })
 
@@ -40,41 +79,39 @@ def test():
         "timestamp": datetime.datetime.now().isoformat()
     })
 
-def get_embeddings(texts: List[str]) -> List[List[float]]:
-    """Get embeddings for a list of texts using transformers."""
-    encoded_input = tokenizer(texts, padding=True, truncation=True, return_tensors='pt', max_length=128)
-    with torch.no_grad():
-        model_output = model(**encoded_input)
-        embeddings = model_output.last_hidden_state.mean(dim=1).numpy().tolist()
-    return embeddings
-
 def search_similar(text: str, num_results: int = 5) -> List[Dict[str, Any]]:
     """Search for similar texts using embeddings."""
     print(f"Searching for: {text}")
-    query_embedding = get_embeddings([text])[0]
     
     try:
+        # Get embedding for the query
+        query_embedding = model.encode(text)
+        
         print("Connecting to database...")
-        conn = sqlite3.connect('papers.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT paper_id, title, abstract, year FROM papers")
+        cursor.execute("SELECT paper_id, title, abstract, year, url FROM papers")
         papers = cursor.fetchall()
         print(f"Found {len(papers)} papers in database")
         
         print("Calculating similarities...")
         paper_texts = [f"{p[1]} {p[2]}" for p in papers]  # title + abstract
-        paper_embeddings = get_embeddings(paper_texts)
+        paper_embeddings = model.encode(paper_texts)
+        
+        # Calculate similarities
         similarities = [np.dot(query_embedding, pe) for pe in paper_embeddings]
         
-        sorted_indices = np.argsort(similarities)[::-1]
+        # Get top results
+        top_indices = np.argsort(similarities)[-num_results:][::-1]
         results = []
-        for idx in sorted_indices[:num_results]:
+        for idx in top_indices:
+            paper = papers[idx]
             results.append({
-                'paper_id': papers[idx][0],
-                'title': papers[idx][1],
-                'abstract': papers[idx][2],
-                'year': papers[idx][3],
-                'url': f"https://arxiv.org/abs/{papers[idx][0]}",  # Construct arXiv URL
+                'paper_id': paper[0],
+                'title': paper[1],
+                'abstract': paper[2],
+                'year': paper[3],
+                'url': paper[4],
                 'similarity': float(similarities[idx])
             })
         
@@ -104,7 +141,8 @@ def search():
         if not query:
             return jsonify({"error": "Query is required"}), 400
 
-        results = search_similar(query)
+        results = search_similar(query, num_results=5)
+        
         response = {
             'results': results,
             'count': len(results)
@@ -117,6 +155,69 @@ def search():
         print("Traceback:")
         print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
+
+@app.route('/generate_paper', methods=['POST'])
+def generate_paper():
+    try:
+        data = request.get_json()
+        topic = data.get('topic', '')
+        outline = data.get('outline', [])
+        
+        if not topic:
+            return jsonify({"error": "Topic is required"}), 400
+            
+        if not generation_model:
+            return jsonify({
+                "error": "Paper generation is currently unavailable",
+                "details": "The text generation service requires Google Cloud credentials. Please check your environment variables and ensure you have set up Google Cloud authentication properly.",
+                "required_vars": [
+                    "GOOGLE_CLOUD_PROJECT",
+                    "GOOGLE_APPLICATION_CREDENTIALS",
+                    "QUOTA_PROJECT_ID"
+                ]
+            }), 503
+            
+        # Generate paper sections based on outline
+        sections = []
+        for section in outline:
+            prompt = f"""Write a detailed research paper section about {topic} focusing on {section}.
+            The section should be well-researched, academic in tone, and include relevant citations.
+            Format the response in markdown."""
+            
+            # Use the model with explicit parameters and proper error handling
+            try:
+                response = generation_model.predict(
+                    prompt,
+                    temperature=0.2,
+                    max_output_tokens=1024,
+                    top_p=0.8,
+                    top_k=40
+                )
+                
+                sections.append({
+                    "title": section,
+                    "content": response.text
+                })
+            except Exception as predict_error:
+                print(f"Error during prediction for section '{section}': {predict_error}")
+                sections.append({
+                    "title": section,
+                    "content": f"**Error generating content for this section:** {str(predict_error)}"
+                })
+            
+        return jsonify({
+            "topic": topic,
+            "sections": sections
+        })
+        
+    except Exception as e:
+        print(f"Error in generate_paper endpoint: {str(e)}")
+        print("Traceback:")
+        print(traceback.format_exc())
+        return jsonify({
+            "error": "Failed to generate paper",
+            "details": str(e)
+        }), 500
 
 if __name__ == '__main__':
     print("Starting Flask server...")
