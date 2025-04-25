@@ -82,42 +82,37 @@ def test():
 def search_similar(text: str, num_results: int = 5) -> List[Dict[str, Any]]:
     """Search for similar texts using embeddings."""
     print(f"Searching for: {text}")
-    query_embedding = get_embeddings([text])[0]
     
     try:
-        if paper_embeddings is None or paper_data is None:
-            load_embeddings()
+        # Get embedding for the query
+        query_embedding = model.encode(text)
+        
+        print("Connecting to database...")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT paper_id, title, abstract, year, url FROM papers")
+        papers = cursor.fetchall()
+        print(f"Found {len(papers)} papers in database")
         
         print("Calculating similarities...")
-        # Normalize the query embedding
-        query_norm = np.linalg.norm(query_embedding)
-        query_embedding = query_embedding / query_norm if query_norm > 0 else query_embedding
+        paper_texts = [f"{p[1]} {p[2]}" for p in papers]  # title + abstract
+        paper_embeddings = model.encode(paper_texts)
         
-        # Calculate normalized similarities
-        similarities = []
-        for pe in paper_embeddings:
-            # Normalize paper embedding
-            paper_norm = np.linalg.norm(pe)
-            paper_embedding = pe / paper_norm if paper_norm > 0 else pe
-            # Calculate cosine similarity (dot product of normalized vectors)
-            similarity = np.dot(query_embedding, paper_embedding)
-            # Ensure similarity is between 0 and 1
-            similarity = max(0, min(1, similarity))
-            # Convert to percentage (0-100)
-            similarity = similarity * 100
-            similarities.append(similarity)
+        # Calculate similarities
+        similarities = [np.dot(query_embedding, pe) for pe in paper_embeddings]
         
-        sorted_indices = np.argsort(similarities)[::-1]
+        # Get top results
+        top_indices = np.argsort(similarities)[-num_results:][::-1]
         results = []
-        for idx in sorted_indices[:num_results]:
-            paper = paper_data[idx]
+        for idx in top_indices:
+            paper = papers[idx]
             results.append({
                 'paper_id': paper[0],
                 'title': paper[1],
                 'abstract': paper[2],
                 'year': paper[3],
-                'url': f"https://arxiv.org/abs/{paper[0]}",  # Construct arXiv URL
-                'similarity': float(similarities[idx])  # Already in percentage (0-100)
+                'url': paper[4],
+                'similarity': float(similarities[idx])
             })
         
         print(f"Returning {len(results)} results")
