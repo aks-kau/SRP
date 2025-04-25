@@ -9,6 +9,8 @@ from transformers import AutoTokenizer, AutoModel
 import torch
 import traceback
 import datetime
+import pickle
+from pathlib import Path
 
 app = Flask(__name__)
 # Update CORS configuration to allow all origins during development
@@ -20,6 +22,47 @@ print("Loading model...")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name)
 print("Model loaded successfully")
+
+# Cache for embeddings
+EMBEDDINGS_CACHE_FILE = "paper_embeddings.pkl"
+paper_embeddings = None
+paper_data = None
+
+# Get the absolute path to the database
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'papers.db')
+
+def load_embeddings():
+    global paper_embeddings, paper_data
+    if Path(EMBEDDINGS_CACHE_FILE).exists():
+        print("Loading cached embeddings...")
+        with open(EMBEDDINGS_CACHE_FILE, 'rb') as f:
+            cache_data = pickle.load(f)
+            paper_embeddings = cache_data['embeddings']
+            paper_data = cache_data['data']
+        print(f"Loaded {len(paper_data)} cached embeddings")
+    else:
+        print("Generating embeddings cache...")
+        print(f"Using database at: {DB_PATH}")
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT paper_id, title, abstract, year FROM papers")
+        papers = cursor.fetchall()
+        conn.close()
+
+        paper_texts = [f"{p[1]} {p[2]}" for p in papers]
+        paper_embeddings = get_embeddings(paper_texts)
+        paper_data = papers
+
+        # Save to cache
+        with open(EMBEDDINGS_CACHE_FILE, 'wb') as f:
+            pickle.dump({
+                'embeddings': paper_embeddings,
+                'data': paper_data
+            }, f)
+        print(f"Cached {len(paper_data)} embeddings")
+
+# Load embeddings on startup
+load_embeddings()
 
 @app.route('/', methods=['GET'])
 def root():
@@ -54,27 +97,36 @@ def search_similar(text: str, num_results: int = 5) -> List[Dict[str, Any]]:
     query_embedding = get_embeddings([text])[0]
     
     try:
-        print("Connecting to database...")
-        conn = sqlite3.connect('papers.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT paper_id, title, abstract, year FROM papers")
-        papers = cursor.fetchall()
-        print(f"Found {len(papers)} papers in database")
+        if paper_embeddings is None or paper_data is None:
+            load_embeddings()
         
         print("Calculating similarities...")
-        paper_texts = [f"{p[1]} {p[2]}" for p in papers]  # title + abstract
-        paper_embeddings = get_embeddings(paper_texts)
-        similarities = [np.dot(query_embedding, pe) for pe in paper_embeddings]
+        # Normalize the query embedding
+        query_norm = np.linalg.norm(query_embedding)
+        query_embedding = query_embedding / query_norm if query_norm > 0 else query_embedding
+        
+        # Calculate normalized similarities
+        similarities = []
+        for pe in paper_embeddings:
+            # Normalize paper embedding
+            paper_norm = np.linalg.norm(pe)
+            paper_embedding = pe / paper_norm if paper_norm > 0 else pe
+            # Calculate cosine similarity (dot product of normalized vectors)
+            similarity = np.dot(query_embedding, paper_embedding)
+            # Ensure similarity is between 0 and 1
+            similarity = max(0, min(1, similarity))
+            similarities.append(similarity)
         
         sorted_indices = np.argsort(similarities)[::-1]
         results = []
         for idx in sorted_indices[:num_results]:
+            paper = paper_data[idx]
             results.append({
-                'paper_id': papers[idx][0],
-                'title': papers[idx][1],
-                'abstract': papers[idx][2],
-                'year': papers[idx][3],
-                'url': f"https://arxiv.org/abs/{papers[idx][0]}",  # Construct arXiv URL
+                'paper_id': paper[0],
+                'title': paper[1],
+                'abstract': paper[2],
+                'year': paper[3],
+                'url': f"https://arxiv.org/abs/{paper[0]}",  # Construct arXiv URL
                 'similarity': float(similarities[idx])
             })
         
@@ -86,9 +138,6 @@ def search_similar(text: str, num_results: int = 5) -> List[Dict[str, Any]]:
         print("Traceback:")
         print(traceback.format_exc())
         return []
-    finally:
-        if 'conn' in locals():
-            conn.close()
 
 @app.route('/search', methods=['POST', 'OPTIONS'])
 def search():
