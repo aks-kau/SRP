@@ -1,30 +1,17 @@
 import React, { useState } from "react";
 import SearchBar from "./components/SearchBar";
-import KeyTerms from "./components/KeyTerms";
 import "./App.css";
 
 function App() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [searchTimeout, setSearchTimeout] = useState(null);
 
   const handleSearch = async (query) => {
     setLoading(true);
     setError(null);
-    
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
-    const timeout = setTimeout(() => {
-      setError("Search is taking longer than expected. Please try a different search term or try again later.");
-      setLoading(false);
-    }, 10000);
-
-    setSearchTimeout(timeout);
-
     try {
+      console.log("Sending search request for:", query);
       const response = await fetch("http://localhost:5000/search", {
         method: "POST",
         headers: {
@@ -35,8 +22,7 @@ function App() {
         mode: "cors",
       });
 
-      clearTimeout(timeout);
-      setSearchTimeout(null);
+      console.log("Response status:", response.status);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -46,6 +32,7 @@ function App() {
       }
 
       const data = await response.json();
+      console.log("Response data:", data);
 
       if (!data.results || !Array.isArray(data.results)) {
         throw new Error("Invalid response format from server");
@@ -67,27 +54,18 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>Research Paper Search</h1>
+        <h1 className="text-3xl font-bold mb-8">Semantic Search</h1>
         <SearchBar onSearch={handleSearch} />
-      </header>
 
-      <main className="search-results">
         {loading && (
-          <div className="loading-container">
-            {/* Will be uncommented when assets are ready
-            <img
-              src="./assets/loading-scholar.gif"
-              alt="Loading..."
-              className="loading-animation"
-            />
-            */}
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <p className="ml-4 text-gray-500">Searching...</p>
+          <div className="mt-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+            <p className="mt-2 text-gray-400">Searching...</p>
           </div>
         )}
 
         {error && (
-          <div className="error-message">
+          <div className="mt-8 p-4 bg-red-100 border border-red-400 text-red-700 rounded">
             <p className="font-bold">Error:</p>
             <p>{error}</p>
             <p className="mt-2 text-sm">
@@ -98,33 +76,32 @@ function App() {
         )}
 
         {!loading && !error && results.length === 0 && (
-          <div className="text-gray-500">
-            <p>Enter a search query to find research papers</p>
-            <KeyTerms />
+          <div className="mt-8 text-gray-400">
+            Enter a search query to find research papers
           </div>
         )}
 
         {results.length > 0 && (
-          <div>
-            <p className="text-gray-500 mb-4">
-              Found {results.length} results
-            </p>
+          <div className="mt-8 w-full max-w-4xl">
+            <p className="text-gray-400 mb-4">Found {results.length} results</p>
             {results.map((result, index) => (
-              <div key={index} className="paper-card">
-                <h3 className="paper-title">{result.title}</h3>
-                <div className="paper-meta">
-                  <span>Year: {result.year}</span>
-                </div>
-                <p className="paper-abstract">{result.abstract}</p>
-                <div className="flex justify-between items-center">
-                  <span className="similarity-badge">
+              <div key={index} className="mb-4 p-4 bg-white rounded-lg shadow">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {result.title}
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Year: {result.year}
+                </p>
+                <p className="text-sm text-gray-500 mt-2">{result.abstract}</p>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-sm text-gray-500">
                     Similarity: {(result.similarity * 100).toFixed(1)}%
                   </span>
                   <a
                     href={result.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="paper-link"
+                    className="text-blue-600 hover:text-blue-800 text-sm"
                   >
                     Read paper
                   </a>
@@ -133,7 +110,7 @@ function App() {
             ))}
           </div>
         )}
-      </main>
+      </header>
     </div>
   );
 }
