@@ -1,20 +1,195 @@
+:root {
+  --primary-color: #006633; /* Green */
+  --secondary-color: #FFD700; /* Gold */
+  --background-color: #F0F2F5; /* Light gray */
+  --text-dark: #222222;
+}
+
+/* Main app style */
 .App {
   text-align: center;
   min-height: 100vh;
-  background-color: #f8f9fa;
+  background-color: var(--background-color);
+  font-family: 'Open Sans', sans-serif;
+  color: var(--text-dark);
 }
 
+/* HEADER stays green */
 .App-header {
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  color: #2c3e50;
+  background-color: var(--primary-color);
+  color: var(--secondary-color); /* Title text is gold */
+  padding: 4rem 2rem 1.5rem; /* Increased padding for spacing */
+  border-bottom-left-radius: 24px;
+  border-bottom-right-radius: 24px;
+  border: 4px solid var(--secondary-color); /* Gold border */
+  border-top: none; /* no border at top */
 }
 
-@media (max-width: 640px) {
-  .App-header {
-    padding: 1rem;
-  }
+/* Fancy title with border and yellow background */
+h1 {
+  font-family: 'Merriweather', serif;
+  font-size: 4rem; /* Larger font size */
+  margin-bottom: 1rem;
+  font-weight: bold;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); /* Subtle shadow for better contrast */
+  
+  /* Fancy border and background */
+  display: inline-block; /* To only affect the title */
+  background-color: var(--secondary-color); /* Yellow background */
+  color: var(--text-dark); /* Dark title text */
+  padding: 1rem 2rem; /* Padding around the text */
+  border: 4px solid var(--primary-color); /* Green border */
+  border-radius: 12px; /* Rounded corners */
+}
+
+/* Subtitle under the title */
+.subtitle {
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
+  color: var(--secondary-color); /* Making subtitle more subtle but still visible */
+}
+
+/* Search bar wrapper */
+.search-bar-wrapper {
+  margin-bottom: 2rem; /* Extra space below */
+}
+
+/* Search button with icon */
+.search-button {
+  background-color: var(--primary-color);
+  color: var(--secondary-color);
+  border: none;
+  padding: 0.75rem 1.25rem;
+  font-size: 1.1rem;
+  cursor: pointer;
+  border-radius: 12px; /* Rounded corners */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.search-button:hover {
+  background-color: var(--secondary-color);
+  color: var(--primary-color);
+}
+
+.search-button i {
+  margin-left: 8px; /* Space between text and icon */
+}
+
+/* Font Awesome icon for the search button */
+.search-button i::before {
+  content: "\f002"; /* FontAwesome "search" icon */
+  font-family: "Font Awesome 5 Free";
+  font-weight: 900;
+  font-size: 1.3rem; /* Adjust the icon size */
+}
+
+/* Loading spinner */
+.loading-container {
+  margin-top: 2rem;
+}
+.spinner {
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid white;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: auto;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error message */
+.error-message {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: #ffe6e6;
+  color: #cc0000;
+  border-radius: 8px;
+}
+
+/* Found message */
+.found-message {
+  margin-top: 1rem;
+  font-size: 1rem;
+  color: #d4f4dd;
+}
+
+/* Main search results area */
+.search-results {
+  background-color: var(--background-color);
+  padding: 2rem;
+}
+
+/* Paper card */
+.paper-card {
+  background: white;
+  color: var(--text-dark);
+  margin-bottom: 2rem;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1); /* Soft shadow effect */
+  text-align: left;
+}
+
+/* Title inside paper */
+.paper-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+/* Meta information (year) */
+.paper-meta {
+  font-size: 0.9rem;
+  color: gray;
+}
+
+/* Abstract paragraph */
+.paper-abstract {
+  font-size: 1rem;
+  margin-top: 1rem;
+}
+
+/* Similarity badge styles */
+.similarity-wrapper {
+  margin-top: 1rem;
+}
+.similarity-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  background-color: lightgray;
+  color: black;
+}
+
+/* Colored similarity */
+.similarity-badge.red {
+  background-color: #ffe5e5;
+  color: #cc0000;
+}
+.similarity-badge.yellow {
+  background-color: #fff9e5;
+  color: #cc9900;
+}
+.similarity-badge.green {
+  background-color: #e5ffe5;
+  color: #006600;
+}
+
+/* Link to paper */
+.paper-link {
+  color: var(--primary-color);
+  text-decoration: underline;
+  font-size: 0.9rem;
+}
+.paper-link:hover {
+  color: var(--secondary-color);
 }
